@@ -84,17 +84,17 @@ export const forgotPassword = async (req, res, next) => {
       [resetToken, resetTokenExpiry, users[0].id]
     );
 
-    const emailResult = await sendPasswordResetEmail(email, resetToken);
-
-    if (emailResult.success) {
-      res.json({ message: 'Password reset email sent' });
-    } else {
-      res.json({
-        message: 'Password reset token generated, but email could not be sent',
-        warning: emailResult.error || 'Email service not configured',
-        reset_link: emailResult.link
+    sendPasswordResetEmail(email, resetToken)
+      .then((emailResult) => {
+        if (!emailResult.success) {
+          console.error(`Failed to send password reset email to ${email}:`, emailResult.error);
+        }
+      })
+      .catch((error) => {
+        console.error(`Error sending password reset email to ${email}:`, error.message);
       });
-    }
+
+    res.json({ message: 'Password reset email sent' });
   } catch (error) {
     next(error);
   }
