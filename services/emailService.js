@@ -7,12 +7,18 @@ const getFrontendUrl = () => {
     : process.env.FRONTEND_URL;
 };
 
+let transporterInstance = null;
+
 const createTransporter = () => {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     return null;
   }
 
-  return nodemailer.createTransport({
+  if (transporterInstance) {
+    return transporterInstance;
+  }
+
+  transporterInstance = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587'),
     secure: process.env.SMTP_SECURE === 'true',
@@ -20,7 +26,17 @@ const createTransporter = () => {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    rateDelta: 1000,
+    rateLimit: 5,
   });
+
+  return transporterInstance;
 };
 
 export const sendInvitationEmail = async (email, invitationToken) => {
@@ -81,12 +97,18 @@ export const sendInvitationEmail = async (email, invitationToken) => {
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Email sending timeout after 15 seconds')), 15000);
+    });
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     return {
       success: true,
       messageId: info.messageId
     };
   } catch (error) {
+    console.error('Email sending error:', error.message);
     return {
       success: false,
       error: error.message || 'Email sending failed',
@@ -156,12 +178,18 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Email sending timeout after 15 seconds')), 15000);
+    });
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     return {
       success: true,
       messageId: info.messageId
     };
   } catch (error) {
+    console.error('Email sending error:', error.message);
     return {
       success: false,
       error: error.message || 'Email sending failed',
