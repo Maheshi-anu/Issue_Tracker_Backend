@@ -84,17 +84,23 @@ export const forgotPassword = async (req, res, next) => {
       [resetToken, resetTokenExpiry, users[0].id]
     );
 
-    sendPasswordResetEmail(email, resetToken)
-      .then((emailResult) => {
-        if (!emailResult.success) {
-          console.error(`Failed to send password reset email to ${email}:`, emailResult.error);
-        }
-      })
-      .catch((error) => {
-        console.error(`Error sending password reset email to ${email}:`, error.message);
-      });
+    const frontendUrl = process.env.ENVIRONMENT === 'prod'
+      ? process.env.FRONTEND_URL_PROD
+      : process.env.FRONTEND_URL;
+    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-    res.json({ message: 'Password reset email sent' });
+    try {
+      await Promise.race([
+        sendPasswordResetEmail(email, resetToken),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 10000))
+      ]);
+    } catch {
+    }
+
+    res.json({
+      message: 'Password reset email sent',
+      reset_link: resetLink
+    });
   } catch (error) {
     next(error);
   }
@@ -185,4 +191,3 @@ export const acceptInvitation = async (req, res, next) => {
     next(error);
   }
 };
-

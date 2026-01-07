@@ -108,7 +108,6 @@ export const sendInvitationEmail = async (email, invitationToken) => {
       messageId: info.messageId
     };
   } catch (error) {
-    console.error('Email sending error:', error.message);
     return {
       success: false,
       error: error.message || 'Email sending failed',
@@ -189,7 +188,6 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       messageId: info.messageId
     };
   } catch (error) {
-    console.error('Email sending error:', error.message);
     return {
       success: false,
       error: error.message || 'Email sending failed',
@@ -197,4 +195,3 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     };
   }
 };
-

@@ -36,17 +36,23 @@ export const inviteUser = async (req, res, next) => {
       [email, fname || null, lname || null, role, 'invited', invitationToken, expiresAt, req.user.id]
     );
 
-    sendInvitationEmail(email, invitationToken)
-      .then((emailResult) => {
-        if (!emailResult.success) {
-          console.error(`Failed to send invitation email to ${email}:`, emailResult.error);
-        }
-      })
-      .catch((error) => {
-        console.error(`Error sending invitation email to ${email}:`, error.message);
-      });
+    const frontendUrl = process.env.ENVIRONMENT === 'prod'
+      ? process.env.FRONTEND_URL_PROD
+      : process.env.FRONTEND_URL;
+    const invitationLink = `${frontendUrl}/accept-invitation?token=${invitationToken}`;
 
-    res.status(201).json({ message: 'Invitation sent successfully' });
+    try {
+      await Promise.race([
+        sendInvitationEmail(email, invitationToken),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 10000))
+      ]);
+    } catch {
+    }
+
+    res.status(201).json({
+      message: 'Invitation sent successfully',
+      invitation_link: invitationLink
+    });
   } catch (error) {
     next(error);
   }
@@ -206,4 +212,3 @@ export const deleteUser = async (req, res, next) => {
     next(error);
   }
 };
-
