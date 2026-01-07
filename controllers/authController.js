@@ -89,18 +89,23 @@ export const forgotPassword = async (req, res, next) => {
       : process.env.FRONTEND_URL;
     const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-    try {
-      await Promise.race([
-        sendPasswordResetEmail(email, resetToken),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 10000))
-      ]);
-    } catch {
-    }
+    const emailResult = await Promise.race([
+      sendPasswordResetEmail(email, resetToken),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 10000))
+    ]).catch(() => ({ success: false, error: 'Email timeout', link: resetLink }));
 
-    res.json({
-      message: 'Password reset email sent',
-      reset_link: resetLink
-    });
+    if (emailResult.success) {
+      res.json({
+        message: 'Password reset email sent',
+        reset_link: resetLink
+      });
+    } else {
+      res.json({
+        message: 'Password reset token generated, but email could not be sent',
+        warning: emailResult.error || 'Email service error',
+        reset_link: resetLink
+      });
+    }
   } catch (error) {
     next(error);
   }

@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 
 const getFrontendUrl = () => {
   const isProduction = process.env.ENVIRONMENT === 'prod';
@@ -7,56 +7,24 @@ const getFrontendUrl = () => {
     : process.env.FRONTEND_URL;
 };
 
-let transporterInstance = null;
-
-const createTransporter = () => {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    return null;
-  }
-
-  if (transporterInstance) {
-    return transporterInstance;
-  }
-
-  transporterInstance = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
-    pool: true,
-    maxConnections: 5,
-    maxMessages: 100,
-    rateDelta: 1000,
-    rateLimit: 5,
-  });
-
-  return transporterInstance;
-};
-
 export const sendInvitationEmail = async (email, invitationToken) => {
   const frontendUrl = getFrontendUrl();
   const invitationLink = `${frontendUrl}/accept-invitation?token=${invitationToken}`;
 
-  const transporter = createTransporter();
-
-  if (!transporter) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
     return {
       success: false,
-      error: 'SMTP not configured',
+      error: 'SendGrid not configured',
       link: invitationLink
     };
   }
 
   try {
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+    const msg = {
       to: email,
+      from: process.env.SENDGRID_FROM_EMAIL,
       subject: 'You have been invited to join Issue Tracker',
       html: `
         <!DOCTYPE html>
@@ -97,20 +65,30 @@ export const sendInvitationEmail = async (email, invitationToken) => {
       `,
     };
 
-    const sendPromise = transporter.sendMail(mailOptions);
+    const sendPromise = sgMail.send(msg);
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Email sending timeout after 15 seconds')), 15000);
     });
 
-    const info = await Promise.race([sendPromise, timeoutPromise]);
-    return {
-      success: true,
-      messageId: info.messageId
-    };
+    const [response] = await Promise.race([sendPromise, timeoutPromise]);
+
+    if (response && response.statusCode >= 200 && response.statusCode < 300) {
+      return {
+        success: true,
+        messageId: response.headers?.['x-message-id'] || 'sent'
+      };
+    } else {
+      return {
+        success: false,
+        error: `SendGrid returned status ${response?.statusCode}`,
+        link: invitationLink
+      };
+    }
   } catch (error) {
+    const errorMessage = error.response?.body?.errors?.[0]?.message || error.message || 'Email sending failed';
     return {
       success: false,
-      error: error.message || 'Email sending failed',
+      error: errorMessage,
       link: invitationLink
     };
   }
@@ -120,20 +98,20 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
   const frontendUrl = getFrontendUrl();
   const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-  const transporter = createTransporter();
-
-  if (!transporter) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
     return {
       success: false,
-      error: 'SMTP not configured',
+      error: 'SendGrid not configured',
       link: resetLink
     };
   }
 
   try {
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+    const msg = {
       to: email,
+      from: process.env.SENDGRID_FROM_EMAIL,
       subject: 'Reset Your Password - Issue Tracker',
       html: `
         <!DOCTYPE html>
@@ -177,20 +155,30 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       `,
     };
 
-    const sendPromise = transporter.sendMail(mailOptions);
+    const sendPromise = sgMail.send(msg);
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Email sending timeout after 15 seconds')), 15000);
     });
 
-    const info = await Promise.race([sendPromise, timeoutPromise]);
-    return {
-      success: true,
-      messageId: info.messageId
-    };
+    const [response] = await Promise.race([sendPromise, timeoutPromise]);
+
+    if (response && response.statusCode >= 200 && response.statusCode < 300) {
+      return {
+        success: true,
+        messageId: response.headers?.['x-message-id'] || 'sent'
+      };
+    } else {
+      return {
+        success: false,
+        error: `SendGrid returned status ${response?.statusCode}`,
+        link: resetLink
+      };
+    }
   } catch (error) {
+    const errorMessage = error.response?.body?.errors?.[0]?.message || error.message || 'Email sending failed';
     return {
       success: false,
-      error: error.message || 'Email sending failed',
+      error: errorMessage,
       link: resetLink
     };
   }

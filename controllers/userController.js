@@ -41,18 +41,23 @@ export const inviteUser = async (req, res, next) => {
       : process.env.FRONTEND_URL;
     const invitationLink = `${frontendUrl}/accept-invitation?token=${invitationToken}`;
 
-    try {
-      await Promise.race([
-        sendInvitationEmail(email, invitationToken),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 10000))
-      ]);
-    } catch {
-    }
+    const emailResult = await Promise.race([
+      sendInvitationEmail(email, invitationToken),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 10000))
+    ]).catch(() => ({ success: false, error: 'Email timeout', link: invitationLink }));
 
-    res.status(201).json({
-      message: 'Invitation sent successfully',
-      invitation_link: invitationLink
-    });
+    if (emailResult.success) {
+      res.status(201).json({
+        message: 'Invitation sent successfully',
+        invitation_link: invitationLink
+      });
+    } else {
+      res.status(201).json({
+        message: 'User invited successfully, but email could not be sent',
+        warning: emailResult.error || 'Email service error',
+        invitation_link: invitationLink
+      });
+    }
   } catch (error) {
     next(error);
   }
