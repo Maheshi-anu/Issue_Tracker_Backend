@@ -36,17 +36,17 @@ export const inviteUser = async (req, res, next) => {
       [email, fname || null, lname || null, role, 'invited', invitationToken, expiresAt, req.user.id]
     );
 
-    const emailResult = await sendInvitationEmail(email, invitationToken);
-
-    if (emailResult.success) {
-      res.status(201).json({ message: 'Invitation sent successfully' });
-    } else {
-      res.status(201).json({
-        message: 'User invited successfully, but email could not be sent',
-        warning: emailResult.error || 'Email service not configured',
-        invitation_link: emailResult.link
+    sendInvitationEmail(email, invitationToken)
+      .then((emailResult) => {
+        if (!emailResult.success) {
+          console.error(`Failed to send invitation email to ${email}:`, emailResult.error);
+        }
+      })
+      .catch((error) => {
+        console.error(`Error sending invitation email to ${email}:`, error.message);
       });
-    }
+
+    res.status(201).json({ message: 'Invitation sent successfully' });
   } catch (error) {
     next(error);
   }
